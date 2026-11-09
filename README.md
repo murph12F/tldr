@@ -74,7 +74,7 @@ codex plugin marketplace add murph12F/tldr
 codex plugin add tldr@tldr
 ```
 
-Then open `/hooks` in Codex and trust the plugin's hooks: Codex runs no plugin hook until you do.
+Then open `/hooks` in Codex and trust the plugin's hooks: Codex runs no plugin hook until you do. Tested on Codex 0.167.0: rules injected every turn, a Pick block with your keys, and a one-key reply decoded and acted on.
 
 Both read one settings file, `~/.claude/tldr.json`, so your keys and choices follow you between agents. Pick decoding reads either transcript format (Claude Code's session JSONL, Codex's rollout JSONL).
 

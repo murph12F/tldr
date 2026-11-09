@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 (2026-11-09)
+
+- Decoded picks no longer end in a double period when an option's text ends with one.
+- Codex support tested end to end on Codex 0.167.0.
+
 ## 0.5.0 (2026-11-09)
 
 - Codex support: the repo installs in Codex as it is (`codex plugin marketplace add murph12F/tldr`), and Pick decoding reads Codex rollout transcripts as well as Claude Code's.

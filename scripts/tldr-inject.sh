@@ -42,7 +42,7 @@ if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null
     | (if length > 0 and .[-1].k == "p" then .[:-1] else . end)
     | map(select(.k == "a")) | last | .t // ""' 2>/dev/null)
   picks=$(jq -nr --arg text "$last" --arg reply "$reply" --argjson c "$cfg" '
-    def clean: gsub("[`*_]"; "") | gsub("^[\\s>|:-]+|[\\s>|:,;/-]+$"; "");
+    def clean: gsub("[`*_]"; "") | gsub("^[\\s>|:-]+|[\\s>|:,;/.-]+$"; "");
     ($c.hint_keys | split("")) as $ks
     # Option line: "- `a` option text" (or "- [a] option text"), one option per
     # line, under a decision name line ("Reply format").
