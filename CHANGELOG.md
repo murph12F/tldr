@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 (2026-11-09)
+
+- Codex support: the repo installs in Codex as it is (`codex plugin marketplace add murph12F/tldr`), and Pick decoding reads Codex rollout transcripts as well as Claude Code's.
+- Repository renamed from `claude-tldr` to `tldr`.
+
 ## 0.4.0 (2026-11-09)
 
 - Settings and help print as markdown tables (Setting, Value, What it does, Change it), so Claude Code draws them as real tables instead of a code block.

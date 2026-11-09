@@ -349,6 +349,22 @@ c=$(keys_ctx ae)
 if [[ "$c" != *"[tldr picks]"* ]] && [[ "$c" != *'Pick:'* ]]; then ok "choices off: no rule, no decode"; else bad "choices off" "$c"; fi
 reset_cfg
 
+# 12b. Codex rollout transcripts decode the same way
+reset_cfg
+echo '{"hint_keys":"aoeuhtns"}' >"$HOME/.claude/tldr.json"
+ctr="$work/codex-rollout.jsonl"
+{ jq -nc '{type:"session_meta",payload:{id:"x"}}'
+  jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"first"}]}}'
+  jq -nc --arg t "$reply_text" '{type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:$t}]}}'
+  jq -nc '{type:"event_msg",payload:{type:"token_count"}}'
+  jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"ae"}]}}'; } >"$ctr"
+c=$(jq -nc --arg t "$ctr" --arg c "$proj" '{cwd:$c,prompt:"ae",transcript_path:$t,hook_event_name:"UserPromptSubmit"}' \
+    | env -u CLAUDE_PROJECT_DIR "$S/tldr-inject.sh" | jq -r '.hookSpecificOutput.additionalContext')
+if [[ "$c" == *"They picked: Scope = labels + decoding (recommended); Default keys = asdfjkl (recommended)."* ]]; then
+  ok "Codex rollout transcript: keys decoded"
+else bad "Codex decode" "$c"; fi
+reset_cfg
+
 # 13. pick_info, keys view, settings table
 reset_cfg
 c=$(ctx)

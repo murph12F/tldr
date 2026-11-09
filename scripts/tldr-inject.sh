@@ -30,9 +30,14 @@ if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null
    && [ -n "$tpath" ] && [ -f "$tpath" ] && [ -r "$tpath" ]; then
   last=$(tail -n 400 "$tpath" 2>/dev/null | jq -R -s -r '
     [ split("\n")[] | fromjson?
+      # Claude Code transcript lines, then Codex rollout lines.
       | if .type == "user" and (.message.content | type) == "string" then {k: "p"}
         elif .type == "assistant" and (.message.content | type) == "array"
           then .message.content[] | select(.type == "text") | {k: "a", t: .text}
+        elif .type == "response_item" and .payload.type == "message" and .payload.role == "user" then {k: "p"}
+        elif .type == "response_item" and .payload.type == "message" and .payload.role == "assistant"
+             and (.payload.content | type) == "array"
+          then .payload.content[] | select(.type == "output_text") | {k: "a", t: .text}
         else empty end ]
     | (if length > 0 and .[-1].k == "p" then .[:-1] else . end)
     | map(select(.k == "a")) | last | .t // ""' 2>/dev/null)

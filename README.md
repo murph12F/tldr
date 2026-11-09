@@ -1,6 +1,6 @@
 # tldr
 
-A Claude Code plugin that ends long answers with a skimmable TLDR: the outcome, and what needs you. The full answer stays. Short answers stay short. When Claude needs a decision, every option gets a key from your home row, Vimium style, and you answer with the keys. It keeps working in long sessions and after compaction because the rule is re-injected by a hook on every prompt instead of living in conversation history.
+A plugin for **Claude Code and Codex** that ends long answers with a skimmable TLDR: the outcome, and what needs you. The full answer stays. Short answers stay short. When the agent needs a decision, every option gets a key from your home row, Vimium style, and you answer with the keys. It keeps working in long sessions and after compaction because the rule is re-injected by a hook on every prompt instead of living in conversation history.
 
 ## Why
 
@@ -56,18 +56,27 @@ You still press Enter: a hook cannot take a single keypress in the prompt.
 
 ## Install
 
-From a local checkout (no marketplace, current session only):
+This repo is both the marketplace and the plugin. The same files install in both agents: Codex reads `.claude-plugin/` manifests and gives plugin hooks the same `UserPromptSubmit` input and output.
 
-```bash
-claude --plugin-dir /path/to/claude-tldr
-```
-
-As a marketplace (this repo is both the marketplace and the plugin):
+**Claude Code**
 
 ```
-/plugin marketplace add murph12F/claude-tldr      # or a local path: /path/to/claude-tldr
+/plugin marketplace add murph12F/tldr      # or a local path
 /plugin install tldr@tldr
 ```
+
+From a local checkout, for one session: `claude --plugin-dir /path/to/tldr`.
+
+**Codex**
+
+```bash
+codex plugin marketplace add murph12F/tldr
+codex plugin add tldr@tldr
+```
+
+Then open `/hooks` in Codex and trust the plugin's hooks: Codex runs no plugin hook until you do.
+
+Both read one settings file, `~/.claude/tldr.json`, so your keys and choices follow you between agents. Pick decoding reads either transcript format (Claude Code's session JSONL, Codex's rollout JSONL).
 
 Requires `bash` and `jq`. If `jq` is missing, the hooks print a one-line error to stderr and exit 0 with no output, so the session is never broken; you just get no TLDR rules.
 
@@ -144,9 +153,11 @@ claude plugin validate .
 ## Uninstall
 
 ```
-/plugin uninstall tldr@tldr
+/plugin uninstall tldr@tldr                  # Claude Code
 /plugin marketplace remove tldr
-rm ~/.claude/tldr.json            # optional: your saved settings
+codex plugin remove tldr@tldr                # Codex
+codex plugin marketplace remove tldr
+rm ~/.claude/tldr.json                       # optional: your saved settings
 ```
 
 ## Docs used

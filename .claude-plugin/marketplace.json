@@ -8,7 +8,7 @@
     {
       "name": "tldr",
       "source": "./",
-      "description": "Ends long answers with a skimmable TLDR. Configurable, survives compaction."
+      "description": "Claude Code and Codex: ends long answers with a skimmable TLDR. Configurable, survives compaction."
     }
   ]
 }
