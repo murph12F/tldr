@@ -63,7 +63,7 @@ if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null
           if $b.cls == "t" then . + [{name: ($b.line | clean | .[:80]), opts: []}]
           elif $b.cls == "o" then
             (if length == 0 then [{name: "", opts: []}] else . end)
-            | .[-1].opts += [ $b.line | opt | {key, text: (.text | clean | .[:120])} ]
+            | .[-1].opts += [ $b.line | opt | {key, text: (.text | clean | .[:200])} ]
           else . end) )
     | to_entries | map(.value + {d: .key}) as $ds
     | [ $ds[] as $d | $d.opts[] | . + {d: $d.d} ] as $all
@@ -121,7 +121,7 @@ jq -nc --argjson c "$cfg" --arg picks "$picks" '
           (if $c.position == "top" then "Then a blank line, then the answer." else empty end),
           (if $c.when == "long" then "Shorter replies: no TLDR." else empty end),
           (if $c.choices == "keys" then
-            "Decisions for the user: end the reply with a `**Pick:**` block; per decision a short name line, then one option per line, ``- `k` option``, keys from `\($c.hint_keys)` in order, each used once per reply, recommended first and marked (recommended), an empty line between decisions; last line: Reply with keys, or `.` for all recommended."
+            "Decisions for the user: end the reply with a `**Pick:**` block; per decision a short name line, then one option per line, ``- `k` option``, keys from `\($c.hint_keys)` in order, each used once per reply, recommended first and marked (recommended), an empty line between decisions\(if $c.pick_info == "full" then "; after each option, on the same line, `: ` then what it does and its main cost or risk (under 15 words)" else "" end); last line: Reply with keys, or `.` for all recommended."
            else empty end),
           "Never restate the question or recap \"I did X\". Never truncate code, commands, or security/data-loss warnings. No em dash character.",
         (if $picks == "" then empty else $picks end)

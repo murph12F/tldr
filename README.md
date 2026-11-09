@@ -73,26 +73,18 @@ Requires `bash` and `jq`. If `jq` is missing, the hooks print a one-line error t
 
 ## Use
 
-Plugin skills are namespaced `/<plugin>:<skill>`, so the command is `/tldr:tldr`:
+Type `/tldr` to see the commands:
 
-```
-/tldr:tldr                         show settings and where each comes from
-/tldr:tldr help                    list every command
-/tldr:tldr on | off | always       TLDR on long replies / never / every reply
-/tldr:tldr top | bottom            TLDR position
-/tldr:tldr short [N] | full        cap the whole reply at N lines / no cap
-/tldr:tldr lines 12                reply length that triggers a TLDR
-/tldr:tldr bullets 2               max TLDR bullets
-/tldr:tldr include +risks -running add/remove TLDR items (or: include outcome,risks)
-/tldr:tldr strict on | strict off  Stop hook enforcement
-/tldr:tldr choices on | off        label decision options with keys
-/tldr:tldr keys aoeuhtns           your option keys (user config only)
-/tldr:tldr set KEY VALUE           any key from the table below; unset KEY drops it
-/tldr:tldr reset                   clear your settings
-/tldr:tldr --project top           any change, written to <project>/.claude/tldr.json
-```
+| Command | What it does |
+| :- | :- |
+| `/tldr:settings` | Every setting as a table: value, what it does, the command that changes it |
+| `/tldr:on` / `/tldr:off` | TLDR on long replies / never |
+| `/tldr:keys` | Show your Pick keys; `/tldr:keys aoeuhtns` sets them |
+| `/tldr:tldr <command>` | Everything else; `/tldr:tldr help` lists it all |
 
-`status` prints one row per key with its value, where it comes from (`default`, `user`, `project`), and the allowed values. It also flags invalid or unknown keys in either file, without echoing their contents. Changes are written atomically, rejected as a whole with a message naming the allowed values if anything is invalid, and apply from your next prompt. If a project file overrides a key you just changed in your user config, the command says so.
+`/tldr:tldr` commands: `always`, `top`, `bottom`, `short [N]`, `full`, `lines N`, `bullets N`, `include +risks -running` (or `include outcome,risks`), `strict on|off`, `choices on|off`, `info short|full`, `set KEY VALUE`, `unset KEY`, `reset`, and `--project` on any change to write `<project>/.claude/tldr.json` instead of yours.
+
+Output is markdown, so Claude Code draws the settings and help as tables. Settings show where each value comes from (yours, project, or default) and flag invalid or unknown keys in either file without echoing their contents. Changes are written atomically, rejected as a whole with a message naming the allowed values if anything is invalid, and apply from your next prompt. If a project file overrides a key you just changed in your user config, the command says so.
 
 ## Config
 
@@ -109,6 +101,7 @@ Plugin skills are namespaced `/<plugin>:<skill>`, so the command is `/tldr:tldr`
 | `max_bullets` | integer 1-5 | `3` | Bullet cap |
 | `strict` | `true`, `false` | `false` | Stop hook enforces the TLDR on long replies (see below) |
 | `choices` | `"keys"`, `"off"` | `"keys"` | Label decision options with keys and decode keys-only replies (see [Choice keys](#choice-keys)) |
+| `pick_info` | `"short"`, `"full"` | `"short"` | `full`: each Pick option also says what it does and its main cost or risk, on the same line |
 | `hint_keys` | 2-26 distinct `a-z`/`0-9` | `"asdfjkl"` | Option keys, in the order Claude uses them. User config only; ignored in a project file |
 
 Example project override:
@@ -122,7 +115,7 @@ Example project override:
 - **`UserPromptSubmit` hook** (`scripts/tldr-inject.sh`): reads the merged config and returns `hookSpecificOutput.additionalContext` with a ~60 word rule block. Because it runs on every prompt, toggles take effect immediately and the rules return after compaction without a `SessionStart` hook. The injected text is marked "newest wins" so earlier blocks still in context don't conflict. Docs: [UserPromptSubmit decision control](https://code.claude.com/docs/en/hooks), 10,000 character cap on `additionalContext`, 30 s default timeout on this event (this plugin sets 5 s).
 - **Fixed quality rules** in every injection: outcome first with concrete numbers and decisions, not process narration; `Needs you:` always present when included; never restate the question; no "I did X" recaps; short replies get no TLDR when `when` is `long`; never truncate code, commands, or security/data-loss warnings; no em dash character.
 - **Optional `Stop` hook** (`scripts/tldr-stop.sh`): only when `strict: true`. If `last_assistant_message` has more than `long_lines` non-blank lines (or any, with `when: "always"`) and no `TLDR` line, it returns `{"decision":"block","reason":...}` asking Claude to append only the TLDR. It does nothing when `stop_hook_active` is true, so it blocks at most once per stop. Docs: [Stop input and decision control](https://code.claude.com/docs/en/hooks).
-- **`/tldr:tldr` skill** (`skills/tldr/SKILL.md`): `disable-model-invocation: true`, pre-allowed to run only `${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh`. Skills are the documented format for new plugin commands ([plugin components](https://code.claude.com/docs/en/plugins/components), [skills](https://code.claude.com/docs/en/skills)).
+- **Skills** `/tldr:tldr`, `/tldr:settings`, `/tldr:on`, `/tldr:off`, `/tldr:keys` (`skills/*/SKILL.md`), all running the one script: `disable-model-invocation: true`, pre-allowed to run only `${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh`. Skills are the documented format for new plugin commands ([plugin components](https://code.claude.com/docs/en/plugins/components), [skills](https://code.claude.com/docs/en/skills)).
 - Hook commands reference scripts through `${CLAUDE_PLUGIN_ROOT}`, quoted, as the [manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference) recommends for shell-form hooks.
 
 Cost: about 160 tokens of context per prompt while enabled (about 80 with `choices: "off"`). `when: "off"` injects nothing. Decoding a keys reply reads the last 400 lines of the transcript, about 50 ms on a 1.7 MB session.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 (2026-11-09)
+
+- Settings and help print as markdown tables (Setting, Value, What it does, Change it), so Claude Code draws them as real tables instead of a code block.
+- New slash commands that show up under `/tldr`: `/tldr:settings`, `/tldr:on`, `/tldr:off`, `/tldr:keys` (no argument shows your keys).
+- `pick_info` (`short`/`full`, default `short`): with `full`, each Pick option also says what it does and its main cost or risk, on the same line. `/tldr:tldr info full`.
+
 ## 0.3.0 (2026-11-09)
 
 - Choice keys: decisions go in a `**Pick:**` block at the end of the reply, a name line per decision and one option per line (``- `k` option``), keys unique across the reply, recommended option first. Reply with the keys (e.g. `ae`) or `.` for every recommended option. `Needs you:` keeps only what is not a pick.

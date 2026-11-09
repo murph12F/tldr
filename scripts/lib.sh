@@ -37,7 +37,7 @@ TLDR_JQ_DEFS='
 def defaults: {
   when: "long", long_lines: 8, position: "bottom", body: "full",
   short_lines: 5, include: ["outcome", "needs_you"], max_bullets: 3,
-  strict: false, choices: "keys", hint_keys: "asdfjkl"
+  strict: false, choices: "keys", hint_keys: "asdfjkl", pick_info: "short"
 };
 def int_in($lo; $hi): type == "number" and . == floor and . >= $lo and . <= $hi;
 def ok($k):
@@ -49,13 +49,14 @@ def ok($k):
   elif $k == "max_bullets" then int_in(1; 5)
   elif $k == "strict"      then type == "boolean"
   elif $k == "choices"     then type == "string" and IN("keys", "off")
+  elif $k == "pick_info"   then type == "string" and IN("short", "full")
   elif $k == "hint_keys"   then type == "string" and test("^[a-z0-9]{2,26}$")
                                 and ((split("") | unique | length) == length)
   elif $k == "include"     then type == "array" and length > 0
                                 and all(.[]; type == "string"
                                   and IN("outcome", "needs_you", "running", "risks"))
   else false end;
-def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict", "choices", "hint_keys"];
+def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict", "choices", "pick_info", "hint_keys"];
 # Personal keys are read from the user config only; a project file cannot set them.
 def personal: ["hint_keys"];
 def include_items: ["outcome", "needs_you", "running", "risks"];
@@ -63,7 +64,7 @@ def allowed: {
   when: "long|always|off", long_lines: "1-500", position: "bottom|top",
   body: "full|short", short_lines: "1-100", include: "outcome,needs_you,running,risks",
   max_bullets: "1-5", strict: "on|off", choices: "keys|off",
-  hint_keys: "2-26 distinct a-z 0-9 (user config only)"
+  hint_keys: "2-26 distinct a-z 0-9 (user config only)", pick_info: "short|full"
 };
 def overlay($layer):
   reduce (defaults | keys[]) as $k (.;

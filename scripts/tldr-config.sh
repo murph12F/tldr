@@ -18,23 +18,26 @@ if ! tldr_have_jq; then
   exit 1
 fi
 
-help_text='tldr: /tldr:tldr <command>
-  status                    show settings and where each one comes from (default)
-  on | off | always         TLDR on long replies / never / on every reply
-  top | bottom              where the TLDR goes
-  short [N] | full          cap the whole reply at N lines / no cap
-  lines N                   reply length (lines) that triggers a TLDR, 1-500
-  bullets N                 max TLDR bullets, 1-5
-  include +risks -running   add/remove TLDR items (outcome, needs_you, running, risks)
-  include outcome,risks     replace the item list
-  strict on | strict off    Stop hook re-asks when a long reply has no TLDR
-  choices on | choices off  label decision options with keys you answer with
-  keys CHARS                your option keys, e.g. keys aoeuhtns (user config only)
-  set KEY VALUE             set any key (names as in status)
-  unset KEY                 drop your value, fall back to project/default
-  reset                     clear all your settings
-  --project                 with any change: write <project>/.claude/tldr.json instead
-  help                      this text
+help_text='**tldr commands**
+
+| Command | What it does |
+| :- | :- |
+| `/tldr:settings` | Show every setting, its value, and how to change it |
+| `/tldr:on` / `/tldr:off` | TLDR on long replies / never |
+| `/tldr:keys aoeuhtns` | Set the keys that label Pick options (yours only) |
+| `/tldr:tldr always` | TLDR on every reply |
+| `/tldr:tldr top` / `bottom` | Where the TLDR goes |
+| `/tldr:tldr short 5` / `full` | Cap the whole reply at N lines / no cap |
+| `/tldr:tldr lines 12` | Reply length (lines) that counts as long, 1-500 |
+| `/tldr:tldr bullets 2` | Max TLDR bullets, 1-5 |
+| `/tldr:tldr include +risks -running` | Add/remove TLDR items: outcome, needs_you, running, risks |
+| `/tldr:tldr strict on` / `off` | Re-ask when a long reply has no TLDR |
+| `/tldr:tldr choices on` / `off` | Pick blocks with keys for decisions |
+| `/tldr:tldr info full` / `short` | Pick options say what each does and its cost / label only |
+| `/tldr:tldr set KEY VALUE` / `unset KEY` | Set any setting / back to default |
+| `/tldr:tldr reset` | Clear all your settings |
+| add `--project` to any change | Write `<project>/.claude/tldr.json` instead of yours |
+
 Changes apply from your next prompt.'
 
 die_usage() {
@@ -74,7 +77,7 @@ cmd=${1-}
 argc=$#
 action=edit
 case "$cmd" in
-  ''|status)         need 0 status; action=status ;;
+  ''|status|settings) need 0 status; action=status ;;
   help|-h|--help)    printf '%s\n' "$help_text"; exit 0 ;;
   on)                need 0 on; add_edit on ;;
   off|always)        need 0 "$cmd"; add_edit set when "$cmd" ;;
@@ -92,7 +95,11 @@ case "$cmd" in
     need 1 "choices on|off"
     case "$1" in on) add_edit set choices keys ;; *) add_edit set choices "$1" ;; esac
     ;;
-  keys)              need 1 "keys CHARS"; add_edit set hint_keys "$1" ;;
+  info)              need 1 "info short|full"; add_edit set pick_info "$1" ;;
+  keys)
+    [ "$argc" -le 1 ] || die_usage "usage: /tldr:keys CHARS (e.g. /tldr:keys aoeuhtns)"
+    if [ "$argc" -eq 0 ]; then action=showkeys; else add_edit set hint_keys "$1"; fi
+    ;;
   include)
     [ "$argc" -ge 1 ] || die_usage "usage: /tldr:tldr include +item -item | include item,item"
     for t in "$@"; do add_edit include '' "$t"; done
@@ -138,9 +145,9 @@ if [ "$action" = status ]; then
   ps=$(file_state "$pcfg")
   label() { # label <path> <state> <reset hint>
     case "$2" in
-      ok)        pretty "$1" ;;
-      none)      printf '%s (none)' "$(pretty "$1")" ;;
-      malformed) printf '%s (malformed, ignored; fix it or run /tldr:tldr %s)' "$(pretty "$1")" "$3" ;;
+      ok)        printf '`%s`' "$(pretty "$1")" ;;
+      none)      printf 'none' ;;
+      malformed) printf '`%s` (malformed, ignored; fix it or run `/tldr:tldr %s`)' "$(pretty "$1")" "$3" ;;
     esac
   }
   ulabel=$(label "$ucfg" "$us" reset)
@@ -148,20 +155,57 @@ if [ "$action" = status ]; then
 
   u=$(layer "$ucfg"); p=$(layer "$pcfg")
   jq -nr --argjson u "$u" --argjson p "$p" --arg ul "$ulabel" --arg pl "$plabel" "$TLDR_JQ_DEFS $TLDR_JQ_SHOW"'
+    def what: {
+      when: "When to add a TLDR: long replies, every reply, or never",
+      long_lines: "Reply length (lines) that counts as long",
+      position: "TLDR at the bottom or the top",
+      body: "Cap the whole reply length, or no cap",
+      short_lines: "Line cap when the reply is capped",
+      include: "What the TLDR bullets cover",
+      max_bullets: "Most TLDR bullets",
+      strict: "Re-ask when a long reply has no TLDR",
+      choices: "Decisions as a Pick block you answer with keys",
+      hint_keys: "Keys that label Pick options",
+      pick_info: "Pick options: label only, or what each does and its cost"
+    };
+    def how: {
+      when: "`/tldr:on` `/tldr:off` `/tldr:tldr always`",
+      long_lines: "`/tldr:tldr lines 12`",
+      position: "`/tldr:tldr top` `/tldr:tldr bottom`",
+      body: "`/tldr:tldr short 5` `/tldr:tldr full`",
+      short_lines: "`/tldr:tldr short 5`",
+      include: "`/tldr:tldr include +risks -running`",
+      max_bullets: "`/tldr:tldr bullets 2`",
+      strict: "`/tldr:tldr strict on`",
+      choices: "`/tldr:tldr choices off`",
+      hint_keys: "`/tldr:keys aoeuhtns`",
+      pick_info: "`/tldr:tldr info full` `/tldr:tldr info short`"
+    };
+    def mark($k): src($k) as $s | if $s == "user" then " *(yours)*" elif $s == "project" then " *(project)*" else "" end;
     merged as $m
-    | ([key_order[] as $k | $m[$k] | show($k) | length] | max + 2) as $w
     | def bad($name; $l): [ key_order[] as $k | select(($l | has($k)) and (($l[$k] | ok($k)) | not))
-                            | "  ignored invalid \($name) value for \($k)" ];
+                            | "- Ignored an invalid \($name) value for `\($k)`" ];
       def unknown($name; $l): ([$l | keys[] | select(. as $k | key_order | index($k) | not)] | length)
-                            | if . > 0 then ["  ignored \(.) unknown key(s) in \($name) config"] else [] end;
-    [ "tldr: user    \($ul)", "      project \($pl)",
-      "  \("key" | pad(13))\("value" | pad($w))\("from" | pad(9))allowed",
-      ( key_order[] as $k
-        | "  \($k | pad(13))\($m[$k] | show($k) | pad($w))\(src($k) | pad(9))\(allowed[$k])" ),
-      ( bad("user"; $u) + bad("project"; $p) + unknown("user"; $u) + unknown("project"; $p)
-        + [ personal[] as $k | select($p | has($k)) | "  ignored \($k) in project config (personal key: set it in your user config)" ] )[],
-      "Change: /tldr:tldr help"
-    ] | join("\n")'
+                            | if . > 0 then ["- Ignored \(.) unknown key(s) in the \($name) config"] else [] end;
+    ( bad("user"; $u) + bad("project"; $p) + unknown("user"; $u) + unknown("project"; $p)
+      + [ personal[] as $k | select($p | has($k)) | "- Ignored `\($k)` in the project config: it is personal, set it in yours" ] ) as $warn
+    | [ "**tldr settings**  ·  yours: \($ul)  ·  project: \($pl)", "",
+        "| Setting | Value | What it does | Change it |",
+        "| :- | :- | :- | :- |",
+        ( key_order[] as $k
+          | "| `\($k)` | `\($m[$k] | show($k))`\(mark($k)) | \(what[$k]) | \(how[$k]) |" ),
+        "",
+        ( if ($warn | length) > 0 then ($warn[], "") else empty end ),
+        "All commands: `/tldr:tldr help`. Changes apply from your next prompt."
+      ] | join("\n")'
+  exit $?
+fi
+
+if [ "$action" = showkeys ]; then
+  u=$(layer "$ucfg"); p=$(layer "$pcfg")
+  jq -nr --argjson u "$u" --argjson p "$p" "$TLDR_JQ_DEFS $TLDR_JQ_SHOW"'
+    merged as $m
+    | "Your Pick keys: `\($m.hint_keys)`\(if src("hint_keys") == "user" then "" else " (default)" end). Options are labeled with them in order; reply with the keys, or `.` for every recommended option.\n\nChange them: `/tldr:keys aoeuhtns` (any 2-26 distinct letters or digits)."'
   exit $?
 fi
 
@@ -253,9 +297,10 @@ jq -nr --argjson u "$u" --argjson p "$p" --argjson edits "$edits" --arg scope "$
   | ( if $reset then []
       else [ $edits[] | if .op == "on" then "when" elif .op == "include" then "include" else (.k | keyalias) end ]
            | unique | . as $t | key_order | map(select(. as $k | $t | index($k))) end ) as $touched
-  | [ (if $reset then "tldr: cleared \($path); \(if $scope == "user" then "back to defaults" else "project overrides removed" end), applies from your next prompt"
-       else "tldr: saved \($path); applies from your next prompt" end),
+  | def who($k): {user: "yours", project: "project", default: "default"}[src($k)];
+  [ (if $reset then "Cleared `\($path)`: \(if $scope == "user" then "back to defaults" else "project overrides removed" end). Applies from your next prompt."
+       else "Saved `\($path)`. Applies from your next prompt:" end),
       ( $touched[] as $k
-        | "  \($k) = \($m[$k] | show($k)) (\(src($k)))"
-          + (if $scope == "user" and src($k) == "project" then "  <- project config overrides yours here" else "" end) )
+        | "- `\($k)` = `\($m[$k] | show($k))` (\(who($k)))"
+          + (if $scope == "user" and src($k) == "project" then ". The project config overrides yours here." else "" end) )
     ] | join("\n")'
