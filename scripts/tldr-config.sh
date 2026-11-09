@@ -28,6 +28,8 @@ help_text='tldr: /tldr:tldr <command>
   include +risks -running   add/remove TLDR items (outcome, needs_you, running, risks)
   include outcome,risks     replace the item list
   strict on | strict off    Stop hook re-asks when a long reply has no TLDR
+  choices on | choices off  label decision options with keys you answer with
+  keys CHARS                your option keys, e.g. keys aoeuhtns (user config only)
   set KEY VALUE             set any key (names as in status)
   unset KEY                 drop your value, fall back to project/default
   reset                     clear all your settings
@@ -86,6 +88,11 @@ case "$cmd" in
   lines)             need 1 "lines N"; add_edit set long_lines "$1" ;;
   bullets)           need 1 "bullets N"; add_edit set max_bullets "$1" ;;
   strict)            need 1 "strict on|off"; add_edit set strict "$1" ;;
+  choices)
+    need 1 "choices on|off"
+    case "$1" in on) add_edit set choices keys ;; *) add_edit set choices "$1" ;; esac
+    ;;
+  keys)              need 1 "keys CHARS"; add_edit set hint_keys "$1" ;;
   include)
     [ "$argc" -ge 1 ] || die_usage "usage: /tldr:tldr include +item -item | include item,item"
     for t in "$@"; do add_edit include '' "$t"; done
@@ -121,7 +128,7 @@ layer() { if [ -n "$1" ]; then tldr_read_layer "$1"; else printf '{}'; fi; }
 TLDR_JQ_SHOW='
 def show($k): if $k == "strict" then (if . then "on" else "off" end)
               elif $k == "include" then join(",") else tostring end;
-def src($k): if ($p | has($k)) and ($p[$k] | ok($k)) then "project"
+def src($k): if ($k | IN(personal[]) | not) and ($p | has($k)) and ($p[$k] | ok($k)) then "project"
              elif ($u | has($k)) and ($u[$k] | ok($k)) then "user" else "default" end;
 def pad($n): tostring | . + (" " * ([$n - length, 1] | max));
 '
@@ -151,7 +158,8 @@ if [ "$action" = status ]; then
       "  \("key" | pad(13))\("value" | pad($w))\("from" | pad(9))allowed",
       ( key_order[] as $k
         | "  \($k | pad(13))\($m[$k] | show($k) | pad($w))\(src($k) | pad(9))\(allowed[$k])" ),
-      ( bad("user"; $u) + bad("project"; $p) + unknown("user"; $u) + unknown("project"; $p) )[],
+      ( bad("user"; $u) + bad("project"; $p) + unknown("user"; $u) + unknown("project"; $p)
+        + [ personal[] as $k | select($p | has($k)) | "  ignored \($k) in project config (personal key: set it in your user config)" ] )[],
       "Change: /tldr:tldr help"
     ] | join("\n")'
   exit $?
@@ -181,7 +189,7 @@ u=$(layer "$ucfg")
 p=$(layer "$pcfg")
 res=$(printf '%s' "$current" | jq -c --argjson u "$u" --argjson p "$p" --argjson edits "$edits" --arg scope "$scope" "$TLDR_JQ_DEFS"'
   def fail($m): error({tldr: $m});
-  def keyalias: ({lines: "long_lines", bullets: "max_bullets"}[.] // .);
+  def keyalias: ({lines: "long_lines", bullets: "max_bullets", keys: "hint_keys"}[.] // .);
   def canon: . as $inc | include_items | map(select(. as $x | $inc | index($x)));
   def parse($k):
     if   $k | IN("long_lines", "short_lines", "max_bullets") then (tonumber? // .)
@@ -199,6 +207,7 @@ res=$(printf '%s' "$current" | jq -c --argjson u "$u" --argjson p "$p" --argjson
       ($e.k | keyalias) as $k | known($k; $e.k) | del(.[$k])
     elif $e.op == "set" then
       ($e.k | keyalias) as $k | known($k; $e.k)
+      | (if $scope == "project" and ($k | IN(personal[])) then fail("\($k) is personal: set it without --project") else . end)
       | ($e.v | parse($k)) as $v
       | if $v | ok($k) then .[$k] = (if $k == "include" then ($v | canon) else $v end)
         else fail("\($k) must be \(allowed[$k])") end
@@ -239,7 +248,7 @@ p=$(layer "$pcfg")
 jq -nr --argjson u "$u" --argjson p "$p" --argjson edits "$edits" --arg scope "$scope" \
        --arg path "$(pretty "$target")" --argjson reset "$([ "$action" = reset ] && echo true || echo false)" \
        "$TLDR_JQ_DEFS $TLDR_JQ_SHOW"'
-  def keyalias: ({lines: "long_lines", bullets: "max_bullets"}[.] // .);
+  def keyalias: ({lines: "long_lines", bullets: "max_bullets", keys: "hint_keys"}[.] // .);
   merged as $m
   | ( if $reset then []
       else [ $edits[] | if .op == "on" then "when" elif .op == "include" then "include" else (.k | keyalias) end ]

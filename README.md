@@ -1,6 +1,6 @@
 # tldr
 
-A Claude Code plugin that ends long answers with a skimmable TLDR: the outcome, and what needs you. The full answer stays. Short answers stay short. It keeps working in long sessions and after compaction because the rule is re-injected by a hook on every prompt instead of living in conversation history.
+A Claude Code plugin that ends long answers with a skimmable TLDR: the outcome, and what needs you. The full answer stays. Short answers stay short. When Claude needs a decision, every option gets a key from your home row, Vimium style, and you answer with the keys. It keeps working in long sessions and after compaction because the rule is re-injected by a hook on every prompt instead of living in conversation history.
 
 ## Why
 
@@ -25,6 +25,35 @@ TLDR:
 - Needs you: approve dropping the legacy `retries=10` flag (2 callers in billing/).
 ```
 
+## Choice keys
+
+When Claude needs decisions from you, the reply ends with a Pick block. One option per line, each with its own key, unique across the whole reply:
+
+```
+TLDR:
+- Caveman removed, settings valid.
+
+**Pick:**
+
+Output style
+- `a` remove (recommended)
+- `s` keep both
+
+Status line
+- `d` simple (recommended)
+- `f` none
+
+Reply with keys, or `.` for all recommended.
+```
+
+Reply `ad` and press Enter, or `.` alone to take every option marked recommended. Order, case, spaces and commas don't matter. Keys are drawn as inline code, so they stand out in your theme's code color.
+
+Set your own keys once, e.g. the Dvorak home row: `/tldr:tldr keys aoeuhtns`. The default is `asdfjkl`. Keys are personal, so they are read from your user config only, never from a project file.
+
+When your whole message is option keys, the hook reads Claude's last reply from the session transcript, finds the Pick block, and tells Claude what you picked in words: `They picked: Output style = remove (recommended); Status line = simple (recommended).` It also flags two picks for the same decision, keys that labeled more than one option, and decisions you left unanswered, so a two-letter reply can't be misread. Only the block the reply ends on counts (option lines ``- `k` text``, empty lines, and a name line directly above an option), outside code blocks, so examples and earlier lists are ignored. A message that is not all shown keys (`hello`, `a but keep the backup`) passes through untouched.
+
+You still press Enter: a hook cannot take a single keypress in the prompt.
+
 ## Install
 
 From a local checkout (no marketplace, current session only):
@@ -36,7 +65,7 @@ claude --plugin-dir /path/to/claude-tldr
 As a marketplace (this repo is both the marketplace and the plugin):
 
 ```
-/plugin marketplace add /path/to/claude-tldr      # or <owner>/<repo> once it is on GitHub
+/plugin marketplace add murph12F/claude-tldr      # or a local path: /path/to/claude-tldr
 /plugin install tldr@tldr
 ```
 
@@ -56,6 +85,8 @@ Plugin skills are namespaced `/<plugin>:<skill>`, so the command is `/tldr:tldr`
 /tldr:tldr bullets 2               max TLDR bullets
 /tldr:tldr include +risks -running add/remove TLDR items (or: include outcome,risks)
 /tldr:tldr strict on | strict off  Stop hook enforcement
+/tldr:tldr choices on | off        label decision options with keys
+/tldr:tldr keys aoeuhtns           your option keys (user config only)
 /tldr:tldr set KEY VALUE           any key from the table below; unset KEY drops it
 /tldr:tldr reset                   clear your settings
 /tldr:tldr --project top           any change, written to <project>/.claude/tldr.json
@@ -77,6 +108,8 @@ Plugin skills are namespaced `/<plugin>:<skill>`, so the command is `/tldr:tldr`
 | `include` | subset of `["outcome","needs_you","running","risks"]` | `["outcome","needs_you"]` | Bullets in the TLDR. `Needs you:` is always present when included (says `nothing` if nothing) |
 | `max_bullets` | integer 1-5 | `3` | Bullet cap |
 | `strict` | `true`, `false` | `false` | Stop hook enforces the TLDR on long replies (see below) |
+| `choices` | `"keys"`, `"off"` | `"keys"` | Label decision options with keys and decode keys-only replies (see [Choice keys](#choice-keys)) |
+| `hint_keys` | 2-26 distinct `a-z`/`0-9` | `"asdfjkl"` | Option keys, in the order Claude uses them. User config only; ignored in a project file |
 
 Example project override:
 
@@ -92,7 +125,9 @@ Example project override:
 - **`/tldr:tldr` skill** (`skills/tldr/SKILL.md`): `disable-model-invocation: true`, pre-allowed to run only `${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh`. Skills are the documented format for new plugin commands ([plugin components](https://code.claude.com/docs/en/plugins/components), [skills](https://code.claude.com/docs/en/skills)).
 - Hook commands reference scripts through `${CLAUDE_PLUGIN_ROOT}`, quoted, as the [manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference) recommends for shell-form hooks.
 
-Cost: about 80 tokens of context per prompt while enabled. `when: "off"` injects nothing.
+Cost: about 160 tokens of context per prompt while enabled (about 80 with `choices: "off"`). `when: "off"` injects nothing. Decoding a keys reply reads the last 400 lines of the transcript, about 50 ms on a 1.7 MB session.
+
+- **Choice decoding** (same hook): only when the prompt is one to twelve shown keys, or `.`. It reads `transcript_path` from the hook input, takes Claude's last text reply, and appends a `[tldr picks]` line naming the chosen options to the same `additionalContext`. Option text is cut to 120 characters and the whole line to 1500. It only repeats text Claude itself wrote in the previous reply.
 
 ### Security
 

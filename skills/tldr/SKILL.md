@@ -1,7 +1,7 @@
 ---
 name: tldr
-description: Show or change the tldr plugin's reply summary settings (status, help, on, off, always, top, bottom, short, full, lines, bullets, include, strict, set, unset, reset, --project).
-argument-hint: "[status|help|on|off|always|top|bottom|short [N]|full|lines N|bullets N|include +x -y|strict on|off|set KEY VALUE|unset KEY|reset] [--project]"
+description: Show or change the tldr plugin's reply summary settings (status, help, on, off, always, top, bottom, short, full, lines, bullets, include, strict, choices, keys, set, unset, reset, --project).
+argument-hint: "[status|help|on|off|always|top|bottom|short [N]|full|lines N|bullets N|include +x -y|strict on|off|choices on|off|keys CHARS|set KEY VALUE|unset KEY|reset] [--project]"
 disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh *)
 ---

@@ -37,7 +37,7 @@ TLDR_JQ_DEFS='
 def defaults: {
   when: "long", long_lines: 8, position: "bottom", body: "full",
   short_lines: 5, include: ["outcome", "needs_you"], max_bullets: 3,
-  strict: false
+  strict: false, choices: "keys", hint_keys: "asdfjkl"
 };
 def int_in($lo; $hi): type == "number" and . == floor and . >= $lo and . <= $hi;
 def ok($k):
@@ -48,21 +48,27 @@ def ok($k):
   elif $k == "short_lines" then int_in(1; 100)
   elif $k == "max_bullets" then int_in(1; 5)
   elif $k == "strict"      then type == "boolean"
+  elif $k == "choices"     then type == "string" and IN("keys", "off")
+  elif $k == "hint_keys"   then type == "string" and test("^[a-z0-9]{2,26}$")
+                                and ((split("") | unique | length) == length)
   elif $k == "include"     then type == "array" and length > 0
                                 and all(.[]; type == "string"
                                   and IN("outcome", "needs_you", "running", "risks"))
   else false end;
-def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict"];
+def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict", "choices", "hint_keys"];
+# Personal keys are read from the user config only; a project file cannot set them.
+def personal: ["hint_keys"];
 def include_items: ["outcome", "needs_you", "running", "risks"];
 def allowed: {
   when: "long|always|off", long_lines: "1-500", position: "bottom|top",
   body: "full|short", short_lines: "1-100", include: "outcome,needs_you,running,risks",
-  max_bullets: "1-5", strict: "on|off"
+  max_bullets: "1-5", strict: "on|off", choices: "keys|off",
+  hint_keys: "2-26 distinct a-z 0-9 (user config only)"
 };
 def overlay($layer):
   reduce (defaults | keys[]) as $k (.;
     if ($layer | has($k)) and ($layer[$k] | ok($k)) then .[$k] = $layer[$k] else . end);
-def merged: defaults | overlay($u) | overlay($p)
+def merged: defaults | overlay($u) | overlay($p | delpaths([personal[] | [.]]))
   | .include |= (. as $inc | ["outcome", "needs_you", "running", "risks"]
                  | map(select(. as $x | $inc | index($x))));
 '

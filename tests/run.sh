@@ -48,7 +48,11 @@ if [ "$ev" = UserPromptSubmit ] && [[ "$c" == *"exceeds 8 lines, end it with"* ]
 else bad "defaults" "$out"; fi
 
 words=$(printf '%s' "$c" | wc -w | tr -d ' ')
-if [ "$words" -le 80 ]; then ok "default injection is short ($words words)"; else bad "injection length $words words"; fi
+if [ "$words" -le 130 ]; then ok "default injection is short ($words words)"; else bad "injection length $words words"; fi
+echo '{"choices":"off"}' >"$HOME/.claude/tldr.json"
+w_off=$(ctx | wc -w | tr -d ' ')
+if [ "$w_off" -le 80 ]; then ok "choices off keeps the old size ($w_off words)"; else bad "choices off length $w_off words"; fi
+rm -f "$HOME/.claude/tldr.json"
 
 if printf '%s' "$c" | grep -q $'\xe2\x80\x94'; then bad "injection contains em dash"; else ok "no em dash in injection"; fi
 
@@ -257,6 +261,93 @@ else bad "/tldr status" "$o"; fi
 printf 'not json' >"$ucfg"
 o=$(cfgsh)
 if [[ "$o" == *"malformed, ignored"* ]]; then ok "/tldr status flags malformed config"; else bad "/tldr status malformed" "$o"; fi
+
+# 12. choice keys: rule text, and decoding a keys-only reply from the transcript
+reset_cfg
+c=$(ctx)
+if [[ "$c" == *'one option per line, ``- `k` option``, keys from `asdfjkl`'* ]] && [[ "$c" == *'or `.` for all recommended'* ]]; then
+  ok "choices rule injected with default keys"
+else bad "choices rule" "$c"; fi
+echo '{"hint_keys":"aoeuhtns"}' >"$HOME/.claude/tldr.json"
+c=$(ctx)
+if [[ "$c" == *'keys from `aoeuhtns`'* ]]; then ok "user hint_keys used in the rule"; else bad "user hint_keys" "$c"; fi
+echo '{"hint_keys":"zq"}' >"$proj/.claude/tldr.json"
+c=$(ctx)
+if [[ "$c" == *'keys from `aoeuhtns`'* ]]; then ok "project config cannot set hint_keys"; else bad "project hint_keys" "$c"; fi
+rm -f "$proj/.claude/tldr.json"
+
+# transcript: an earlier reply with examples, then the reply that asks, then the user's keys
+tr="$work/transcript.jsonl"
+asst() { jq -nc --arg t "$1" '{type:"assistant",message:{role:"assistant",content:[{type:"text",text:$t}]}}'; }
+usr()  { jq -nc --arg t "$1" '{type:"user",message:{role:"user",content:$t}}'; }
+reply_text='Plan below.
+
+```
+Example
+- `a` not this
+- `o` nor this
+```
+Earlier options that were already answered:
+- `a` old option
+- `e` another old one
+
+That list above is prose, not the question.
+
+TLDR:
+- Outcome.
+
+**Pick:**
+
+Scope
+- `a` labels + decoding (recommended)
+- `o` labels only
+
+Default keys
+- `e` asdfjkl (recommended)
+- `u` digits
+
+Reply with keys, or `.` for all recommended.'
+{ usr "first"; asst "old reply [a] yes [o] no"; usr "second"
+  asst "$reply_text"
+  jq -nc '{type:"user",message:{role:"user",content:[{type:"tool_result",content:"x"}]}}' >/dev/null
+  echo '{"type":"permission-mode"}'; } >"$tr"
+keys_ctx() { # keys_ctx <prompt> [append prompt to transcript first]
+  local t="$tr"
+  if [ -n "${2:-}" ]; then t="$work/tr2.jsonl"; cp "$tr" "$t"; usr "$1" >>"$t"; fi
+  jq -nc --arg p "$1" --arg t "$t" --arg c "$proj" '{cwd:$c,prompt:$p,transcript_path:$t,hook_event_name:"UserPromptSubmit"}' \
+    | "$S/tldr-inject.sh" | jq -r '.hookSpecificOutput.additionalContext'
+}
+c=$(keys_ctx ae)
+if [[ "$c" == *"They picked: Scope = labels + decoding (recommended); Default keys = asdfjkl (recommended)."* ]] \
+   && [[ "$c" != *"Not answered"* ]] && [[ "$c" != *"not this"* ]] && [[ "$c" != *"old option"* ]]; then
+  ok "keys reply decoded from the last run of options only (code blocks and prose skipped)"
+else bad "decode ae" "$c"; fi
+c=$(keys_ctx ea yes)
+if [[ "$c" == *"They picked: Scope = labels + decoding (recommended); Default keys"* ]]; then
+  ok "decodes when the prompt is already in the transcript, in question order"
+else bad "decode with prompt in transcript" "$c"; fi
+c=$(keys_ctx ' A, U ')
+if [[ "$c" == *'replied `au`'* ]] && [[ "$c" == *"Default keys = digits"* ]]; then ok "keys reply: case, spaces, commas ignored"; else bad "decode normalise" "$c"; fi
+c=$(keys_ctx .)
+if [[ "$c" == *"accept every recommended option: Scope = labels + decoding (recommended); Default keys = asdfjkl (recommended)."* ]] \
+   && [[ "$c" != *"still open"* ]]; then ok "'.' accepts every recommended option"; else bad "decode ." "$c"; fi
+c=$(keys_ctx ao)
+if [[ "$c" == *"Two picks for the same decision (Scope)"* ]] && [[ "$c" == *"Not answered: Default keys."* ]]; then
+  ok "two picks for one decision and unanswered decisions flagged"
+else bad "decode conflict" "$c"; fi
+for p in hello zz 'a but keep the backup' aeh; do
+  c=$(keys_ctx "$p")
+  if [[ "$c" == *"[tldr picks]"* ]]; then bad "decoded a non-keys reply: $p" "$c"; continue; fi
+done
+ok "ordinary replies and unknown keys are not decoded"
+c=$(jq -nc --arg c "$proj" '{cwd:$c,prompt:"ae",transcript_path:"/nonexistent/t.jsonl"}' | "$S/tldr-inject.sh"; echo "rc=$?")
+if [[ "$c" == *"[tldr rules"* ]] && [[ "$c" == *"rc=0"* ]] && [[ "$c" != *"[tldr picks]"* ]]; then
+  ok "missing transcript: rules still injected, no decode"
+else bad "missing transcript" "$c"; fi
+echo '{"hint_keys":"aoeuhtns","choices":"off"}' >"$HOME/.claude/tldr.json"
+c=$(keys_ctx ae)
+if [[ "$c" != *"[tldr picks]"* ]] && [[ "$c" != *'Pick:'* ]]; then ok "choices off: no rule, no decode"; else bad "choices off" "$c"; fi
+reset_cfg
 
 # 11. no em dash anywhere in shipped files
 if grep -rl $'\xe2\x80\x94' "$root" --exclude-dir=.git >/dev/null 2>&1; then

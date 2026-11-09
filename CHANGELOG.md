@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 (2026-11-09)
+
+- Choice keys: decisions go in a `**Pick:**` block at the end of the reply, a name line per decision and one option per line (``- `k` option``), keys unique across the reply, recommended option first. Reply with the keys (e.g. `ae`) or `.` for every recommended option. `Needs you:` keeps only what is not a pick.
+- The UserPromptSubmit hook decodes a keys-only reply against Claude's last reply in the transcript and names the picks back, flagging double picks, reused keys and unanswered decisions. Code blocks and earlier prose are ignored.
+- New keys: `choices` (`keys`/`off`, default `keys`) and `hint_keys` (default `asdfjkl`; user config only, a project file cannot set it). Commands: `/tldr:tldr keys CHARS`, `/tldr:tldr choices on|off`.
+
 ## 0.2.0 (2026-11-06)
 
 - `/tldr:tldr status` (the default) is a table: value, source (`default`/`user`/`project`), and allowed values per key; flags malformed files and invalid or unknown keys without echoing their contents.
