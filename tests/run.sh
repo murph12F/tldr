@@ -265,7 +265,7 @@ if [[ "$o" == *"malformed, ignored"* ]]; then ok "/tldr status flags malformed c
 # 12. choice keys: rule text, and decoding a keys-only reply from the transcript
 reset_cfg
 c=$(ctx)
-if [[ "$c" == *'one option per line, ``- `k` option``, keys from `asdfjkl`'* ]] && [[ "$c" == *'`.` for all recommended, or `?` to explain more'* ]]; then
+if [[ "$c" == *'one option per line, ``- `k` option``, keys from `asdfjkl`'* ]] && [[ "$c" == *'`.` for all recommended, or `+` to explain more'* ]]; then
   ok "choices rule injected with default keys"
 else bad "choices rule" "$c"; fi
 echo '{"hint_keys":"aoeuhtns"}' >"$HOME/.claude/tldr.json"
@@ -340,7 +340,7 @@ for p in hello zz 'a but keep the backup' aeh; do
   if [[ "$c" == *"[tldr picks]"* ]]; then bad "decoded a non-keys reply: $p" "$c"; continue; fi
 done
 ok "ordinary replies and unknown keys are not decoded"
-# 12c. keys on the first line, `?`, trailing dot, unmatched keys
+# 12c. keys on the first line, `+`, trailing dot, unmatched keys
 c=$(keys_ctx $'.\n\nalso rename the repo')
 if [[ "$c" == *"accept every recommended option: Scope = labels + decoding (recommended)"* ]] \
    && [[ "$c" == *"act on the picks, then handle the rest as a new request"* ]]; then
@@ -350,8 +350,10 @@ c=$(keys_ctx $'ae\nthen push it')
 if [[ "$c" == *"They picked: Scope"* ]] && [[ "$c" == *"handle the rest as a new request"* ]]; then ok "first-line letter keys with more text"; else bad "first-line letters" "$c"; fi
 c=$(keys_ctx $'please do\nae')
 if [[ "$c" != *"[tldr picks]"* ]]; then ok "keys on a later line are not decoded"; else bad "later-line keys" "$c"; fi
+c=$(keys_ctx '+')
+if [[ "$c" == *'The user replied `+`: before picking, they want the options in your last reply explained more'* ]]; then ok "+ asks for the options explained"; else bad "+ explain" "$c"; fi
 c=$(keys_ctx '?')
-if [[ "$c" == *'The user replied `?`: before picking, they want the options in your last reply explained more'* ]]; then ok "? asks for the options explained"; else bad "? explain" "$c"; fi
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "? is not a key"; else bad "? decoded" "$c"; fi
 c=$(keys_ctx 'a.')
 if [[ "$c" == *"They picked: Scope = labels + decoding (recommended)."* ]]; then ok "keys with a trailing dot decode"; else bad "trailing dot" "$c"; fi
 c=$(keys_ctx 'th.')
@@ -398,7 +400,7 @@ else bad "pick_info full" "$c"; fi
 o=$(cfgsh info loud); rc=$?
 if [ $rc -eq 2 ] && [[ "$o" == *"pick_info must be short|full"* ]]; then ok "/tldr info rejects bad values"; else bad "info bad" "$o"; fi
 o=$(cfgsh keys)
-if [[ "$o" == *'Your Pick keys: `asdfjkl` (default)'* ]]; then ok "/tldr:keys with no argument shows the keys"; else bad "keys view" "$o"; fi
+if [[ "$o" == *'| `asdfjkl` (default) | Pick options, in order |'* ]]; then ok "/tldr:keys with no argument shows the keys"; else bad "keys view" "$o"; fi
 o=$(cfgsh keys ab cd); rc=$?
 if [ $rc -eq 2 ]; then ok "/tldr:keys refuses two arguments"; else bad "keys two args" "$o"; fi
 o=$(cfgsh settings)
@@ -406,6 +408,39 @@ if [[ "$o" == *"| Setting | Value | What it does | Change it |"* ]] && [[ "$o" =
   ok "/tldr:settings prints a markdown table"
 else bad "settings table" "$o"; fi
 reset_cfg
+
+# 12d. the reply keys are configurable (user config only)
+o=$(cfgsh keys more =); rc=$?
+c=$(keys_ctx '=')
+if [ $rc -eq 0 ] && [[ "$c" == *'The user replied `=`: before picking, they want the options'* ]] && [[ "$c" == *'or `=` to explain more'* ]]; then
+  ok "custom more key decodes and shows in the Pick rule"
+else bad "custom more key" "$o $c"; fi
+c=$(keys_ctx '+')
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "the old more key is no longer special"; else bad "old more key" "$c"; fi
+cfgsh keys all ';' >/dev/null
+c=$(keys_ctx $';\nthen push')
+if [[ "$c" == *'The user replied `;`: accept every recommended option'* ]] && [[ "$c" == *"handle the rest as a new request"* ]] && [[ "$c" == *'Reply with keys, `;` for all recommended'* ]]; then
+  ok "custom all key decodes, with a new request after it"
+else bad "custom all key" "$c"; fi
+c=$(keys_ctx '.')
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "a lone dot is not a pick once the all key moved"; else bad "lone dot" "$c"; fi
+c=$(keys_ctx 'a.')
+if [[ "$c" == *"They picked: Scope = labels + decoding (recommended)."* ]]; then ok "trailing dot still marks keys"; else bad "trailing dot custom" "$c"; fi
+o=$(cfgsh keys more '?'); rc=$?
+if [ $rc -ne 0 ]; then ok "? is refused as a reply key"; else bad "? accepted" "$o"; fi
+o=$(cfgsh keys all a); rc=$?
+if [ $rc -ne 0 ]; then ok "a letter is refused as a reply key"; else bad "letter accepted" "$o"; fi
+o=$(cfgsh keys)
+if [[ "$o" == *'| `;` | Every recommended option |'* ]] && [[ "$o" == *'| `=` | Explain the options more |'* ]]; then ok "/tldr:keys shows all three keys"; else bad "keys table" "$o"; fi
+reset_cfg
+cfgsh keys all + >/dev/null
+c=$(keys_ctx '.')
+if [[ "$c" == *'The user replied `.`: before picking'* ]]; then ok "all key + without a more key: more falls back to ."; else bad "clash fallback" "$c"; fi
+reset_cfg
+mkdir -p "$proj/.claude"; printf '{"more_key":"="}' >"$proj/.claude/tldr.json"
+c=$(keys_ctx '=')
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "a project file cannot set reply keys"; else bad "project reply key" "$c"; fi
+rm -f "$proj/.claude/tldr.json"
 
 # 11. no em dash anywhere in shipped files
 if grep -rl $'\xe2\x80\x94' "$root" --exclude-dir=.git >/dev/null 2>&1; then

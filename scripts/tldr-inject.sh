@@ -22,21 +22,27 @@ proj=$(tldr_project_dir "$input")
 cfg=$(tldr_config "$proj" 2>/dev/null) || exit 0
 
 # Decode option keys against the options in Claude's last reply. The keys are
-# the message's first non-blank line: `ae`, `.` (all recommended), `?` (explain
-# more), or keys with a trailing dot (`a.`). Lines after it are a new request.
+# the message's first non-blank line: `ae`, the all key (`.` by default: every
+# recommended option), the more key (`+`: explain more; never `?`, which opens
+# the shortcuts help in Claude Code and Codex), or keys with a trailing dot
+# (`a.`). Lines after it are a new request.
 picks=''
 head=$(printf '%s' "$input" | jq -r '.prompt // empty | strings | [splits("\n") | select(test("\\S"))] | .[0] // "" | ascii_downcase | gsub("[\\s,]"; "")' 2>/dev/null)
 more=$(printf '%s' "$input" | jq -r '.prompt // empty | strings | [splits("\n") | select(test("\\S"))] | length > 1' 2>/dev/null)
 [ "$more" = true ] || more=false
+allk=$(printf '%s' "$cfg" | jq -r '.all_key' 2>/dev/null)
+morek=$(printf '%s' "$cfg" | jq -r '.more_key' 2>/dev/null)
 reply=$head
 loose=false
-case "$head" in
-  .|\?) ;;
-  *.) reply=${head%.}; loose=true ;;
-esac
+special=false
+if [ -n "$head" ] && { [ "$head" = "$allk" ] || [ "$head" = "$morek" ]; }; then
+  special=true
+else
+  case "$head" in *.) reply=${head%.}; loose=true ;; esac
+fi
 tpath=$(printf '%s' "$input" | jq -r '.transcript_path // empty | strings' 2>/dev/null)
 if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null 2>&1 \
-   && printf '%s' "$head" | grep -Eq '^([a-z0-9]{1,12}\.?|\.|\?)$' \
+   && { [ "$special" = true ] || printf '%s' "$head" | grep -Eq '^[a-z0-9]{1,12}\.?$'; } \
    && [ -n "$tpath" ] && [ -f "$tpath" ] && [ -r "$tpath" ]; then
   last=$(tail -n 400 "$tpath" 2>/dev/null | jq -R -s -r '
     [ split("\n")[] | fromjson?
@@ -52,7 +58,7 @@ if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null
     | (if length > 0 and .[-1].k == "p" then .[:-1] else . end)
     | map(select(.k == "a")) | last | .t // ""' 2>/dev/null)
   picks=$(jq -nr --arg text "$last" --arg reply "$reply" --arg head "$head" \
-                 --argjson loose "$loose" --argjson more "$more" --argjson c "$cfg" '
+                 --argjson loose "$loose" --argjson more "$more" --argjson special "$special" --argjson c "$cfg" '
     def clean: gsub("[`*_]"; "") | gsub("^[\\s>|:-]+|[\\s>|:,;/.-]+$"; "");
     ($c.hint_keys | split("")) as $ks
     # Option line: "- `a` option text" (or "- [a] option text"), one option per
@@ -87,16 +93,16 @@ if printf '%s' "$cfg" | jq -e '.choices == "keys" and .when != "off"' >/dev/null
         | if $n == "" then $o.text else "\($n) = \($o.text)" end;
       ( if $more then " Their message goes on after the keys: act on the picks, then handle the rest as a new request." else "" end ) as $tail
     | ( if ($all | length) == 0 then empty
-      elif $reply == "?" then
-        "[tldr picks] The user replied `?`: before picking, they want the options in your last reply explained more. Say plainly what each option does, what it costs and what could go wrong, then end with the same Pick block and the same keys."
-      elif $reply == "." then
+      elif $special and $reply == $c.more_key then
+        "[tldr picks] The user replied `\($reply)`: before picking, they want the options in your last reply explained more. Say plainly what each option does, what it costs and what could go wrong, then end with the same Pick block and the same keys."
+      elif $special and $reply == $c.all_key then
         [ $ds[] | . as $d | [ .opts[] | select(.text | test("(?i)recommended")) ][0]
           | if . then optname(. + {d: $d.d}) else empty end ] as $rec
         | [ $ds[] | select([.opts[] | select(.text | test("(?i)recommended"))] | length == 0)
           | .name | select(. != "") ] as $norec
         | if ($rec | length) == 0
-          then "[tldr picks] The user replied `.` (accept every recommended option), but your last reply marked none as recommended: ask which options they want."
-          else "[tldr picks] The user replied `.`: accept every recommended option: \($rec | join("; "))."
+          then "[tldr picks] The user replied `\($reply)` (accept every recommended option), but your last reply marked none as recommended: ask which options they want."
+          else "[tldr picks] The user replied `\($reply)`: accept every recommended option: \($rec | join("; "))."
                + (if ($norec | length) > 0 then " No recommended option, still open: \($norec | join("; "))." else "" end) end
       else
         ($reply | split("")) as $typed
@@ -144,7 +150,7 @@ jq -nc --argjson c "$cfg" --arg picks "$picks" '
           (if $c.position == "top" then "Then a blank line, then the answer." else empty end),
           (if $c.when == "long" then "Shorter replies: no TLDR." else empty end),
           (if $c.choices == "keys" then
-            "Decisions for the user: end the reply with a `**Pick:**` block; per decision a short name line, then one option per line, ``- `k` option``, keys from `\($c.hint_keys)` in order, each used once per reply, recommended first and marked (recommended), an empty line between decisions\(if $c.pick_info == "full" then "; after each option, on the same line, `: ` then what it does and its main cost or risk (under 15 words)" else "" end); last line: Reply with keys, `.` for all recommended, or `?` to explain more."
+            "Decisions for the user: end the reply with a `**Pick:**` block; per decision a short name line, then one option per line, ``- `k` option``, keys from `\($c.hint_keys)` in order, each used once per reply, recommended first and marked (recommended), an empty line between decisions\(if $c.pick_info == "full" then "; after each option, on the same line, `: ` then what it does and its main cost or risk (under 15 words)" else "" end); last line: Reply with keys, `\($c.all_key)` for all recommended, or `\($c.more_key)` to explain more."
            else empty end),
           "Never restate the question or recap \"I did X\". Never truncate code, commands, or security/data-loss warnings. No em dash character.",
         (if $picks == "" then empty else $picks end)

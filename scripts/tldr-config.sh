@@ -25,6 +25,7 @@ help_text='**tldr commands**
 | `/tldr:settings` | Show every setting, its value, and how to change it |
 | `/tldr:on` / `/tldr:off` | TLDR on long replies / never |
 | `/tldr:keys aoeuhtns` | Set the keys that label Pick options (yours only) |
+| `/tldr:keys all .` / `more +` | The reply key for every recommended option / for explain more, one of `. + = - ; : ~ ^ *` |
 | `/tldr:tldr always` | TLDR on every reply |
 | `/tldr:tldr top` / `bottom` | Where the TLDR goes |
 | `/tldr:tldr short 5` / `full` | Cap the whole reply at N lines / no cap |
@@ -63,7 +64,7 @@ done
 set -- "${argv[@]+"${argv[@]}"}"
 
 # Printable form of a user token for error messages.
-tok() { printf '%s' "$1" | tr -cd 'a-z0-9_,+.-' | cut -c1-40; }
+tok() { printf '%s' "$1" | tr -cd 'a-z0-9_,+.=;:~^*-' | cut -c1-40; }
 
 edits='[]'
 add_edit() {
@@ -97,8 +98,13 @@ case "$cmd" in
     ;;
   info)              need 1 "info short|full"; add_edit set pick_info "$1" ;;
   keys)
-    [ "$argc" -le 1 ] || die_usage "usage: /tldr:keys CHARS (e.g. /tldr:keys aoeuhtns)"
-    if [ "$argc" -eq 0 ]; then action=showkeys; else add_edit set hint_keys "$1"; fi
+    case "$argc:${1-}" in
+      0:) action=showkeys ;;
+      2:all)  add_edit set all_key "$2" ;;
+      2:more) add_edit set more_key "$2" ;;
+      1:*) add_edit set hint_keys "$1" ;;
+      *) die_usage "usage: /tldr:keys CHARS | /tldr:keys all C | /tldr:keys more C (e.g. /tldr:keys aoeuhtns, /tldr:keys more =)" ;;
+    esac
     ;;
   include)
     [ "$argc" -ge 1 ] || die_usage "usage: /tldr:tldr include +item -item | include item,item"
@@ -166,7 +172,9 @@ if [ "$action" = status ]; then
       strict: "Re-ask when a long reply has no TLDR",
       choices: "Decisions as a Pick block you answer with keys",
       hint_keys: "Keys that label Pick options",
-      pick_info: "Pick options: label only, or what each does and its cost"
+      pick_info: "Pick options: label only, or what each does and its cost",
+      all_key: "Reply key: take every recommended option",
+      more_key: "Reply key: explain the options more"
     };
     def how: {
       when: "`/tldr:on` `/tldr:off` `/tldr:tldr always`",
@@ -179,7 +187,9 @@ if [ "$action" = status ]; then
       strict: "`/tldr:tldr strict on`",
       choices: "`/tldr:tldr choices off`",
       hint_keys: "`/tldr:keys aoeuhtns`",
-      pick_info: "`/tldr:tldr info full` `/tldr:tldr info short`"
+      pick_info: "`/tldr:tldr info full` `/tldr:tldr info short`",
+      all_key: "`/tldr:keys all =`",
+      more_key: "`/tldr:keys more ;`"
     };
     def mark($k): src($k) as $s | if $s == "user" then " *(yours)*" elif $s == "project" then " *(project)*" else "" end;
     merged as $m
@@ -205,7 +215,12 @@ if [ "$action" = showkeys ]; then
   u=$(layer "$ucfg"); p=$(layer "$pcfg")
   jq -nr --argjson u "$u" --argjson p "$p" "$TLDR_JQ_DEFS $TLDR_JQ_SHOW"'
     merged as $m
-    | "Your Pick keys: `\($m.hint_keys)`\(if src("hint_keys") == "user" then "" else " (default)" end). Options are labeled with them in order; reply with the keys, or `.` for every recommended option.\n\nChange them: `/tldr:keys aoeuhtns` (any 2-26 distinct letters or digits)."'
+    | def dflt($k): if src($k) == "user" then "" else " (default)" end;
+      "| Key | Means | Change it |\n| :- | :- | :- |\n"
+      + "| `\($m.hint_keys)`\(dflt("hint_keys")) | Pick options, in order | `/tldr:keys aoeuhtns` (2-26 distinct letters or digits) |\n"
+      + "| `\($m.all_key)`\(dflt("all_key")) | Every recommended option | `/tldr:keys all =` |\n"
+      + "| `\($m.more_key)`\(dflt("more_key")) | Explain the options more | `/tldr:keys more ;` |\n\n"
+      + "Reply keys are one of `\(reply_pool | join(" "))`. Not `?`, `/`, `!`, `@`, `#` or `&`: the prompt uses those."'
   exit $?
 fi
 

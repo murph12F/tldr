@@ -8,7 +8,7 @@ allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh *)
 
 Arguments: `$ARGUMENTS`
 
-1. If the arguments contain any character other than letters, digits, spaces, and `_ , + - .`, do not run anything. Reply exactly: `tldr: arguments may only contain letters, digits, spaces and _ , + - . (see /tldr:tldr help)`
+1. If the arguments contain any character other than letters, digits, spaces, and `_ , + - . = ; : ~ ^ *`, do not run anything. Reply exactly: `tldr: arguments may only contain letters, digits, spaces and _ , + - . = ; : ~ ^ * (see /tldr:tldr help)`
 2. Otherwise run this single Bash command, with each argument word wrapped in single quotes and nothing else on the line (no arguments means none):
 
    `${CLAUDE_PLUGIN_ROOT}/scripts/tldr-config.sh '<word>' '<word>' ...`

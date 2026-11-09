@@ -37,8 +37,13 @@ TLDR_JQ_DEFS='
 def defaults: {
   when: "long", long_lines: 8, position: "bottom", body: "full",
   short_lines: 5, include: ["outcome", "needs_you"], max_bullets: 3,
-  strict: false, choices: "keys", hint_keys: "asdfjkl", pick_info: "short"
+  strict: false, choices: "keys", hint_keys: "asdfjkl", pick_info: "short",
+  all_key: ".", more_key: "+"
 };
+# Pool for the reply keys: no letters or digits (those are option keys), nothing
+# the prompt treats specially (? shortcuts, / commands, ! shell, @ files, # & ),
+# no comma (ignored in replies), no quotes.
+def reply_pool: [".", "+", "=", "-", ";", ":", "~", "^", "*"];
 def int_in($lo; $hi): type == "number" and . == floor and . >= $lo and . <= $hi;
 def ok($k):
   if   $k == "when"        then type == "string" and IN("long", "always", "off")
@@ -52,24 +57,28 @@ def ok($k):
   elif $k == "pick_info"   then type == "string" and IN("short", "full")
   elif $k == "hint_keys"   then type == "string" and test("^[a-z0-9]{2,26}$")
                                 and ((split("") | unique | length) == length)
+  elif $k == "all_key" or $k == "more_key" then type == "string" and IN(reply_pool[])
   elif $k == "include"     then type == "array" and length > 0
                                 and all(.[]; type == "string"
                                   and IN("outcome", "needs_you", "running", "risks"))
   else false end;
-def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict", "choices", "pick_info", "hint_keys"];
+def key_order: ["when", "long_lines", "position", "body", "short_lines", "include", "max_bullets", "strict", "choices", "pick_info", "hint_keys", "all_key", "more_key"];
 # Personal keys are read from the user config only; a project file cannot set them.
-def personal: ["hint_keys"];
+def personal: ["hint_keys", "all_key", "more_key"];
 def include_items: ["outcome", "needs_you", "running", "risks"];
 def allowed: {
   when: "long|always|off", long_lines: "1-500", position: "bottom|top",
   body: "full|short", short_lines: "1-100", include: "outcome,needs_you,running,risks",
   max_bullets: "1-5", strict: "on|off", choices: "keys|off",
-  hint_keys: "2-26 distinct a-z 0-9 (user config only)", pick_info: "short|full"
+  hint_keys: "2-26 distinct a-z 0-9 (user config only)", pick_info: "short|full",
+  all_key: "one of . + = - ; : ~ ^ * (user config only)", more_key: "one of . + = - ; : ~ ^ * (user config only)"
 };
 def overlay($layer):
   reduce (defaults | keys[]) as $k (.;
     if ($layer | has($k)) and ($layer[$k] | ok($k)) then .[$k] = $layer[$k] else . end);
 def merged: defaults | overlay($u) | overlay($p | delpaths([personal[] | [.]]))
+  # The two reply keys must differ: on a clash, more_key takes the other default.
+  | (if .all_key == .more_key then .more_key = (if .all_key == "+" then "." else "+" end) else . end)
   | .include |= (. as $inc | ["outcome", "needs_you", "running", "risks"]
                  | map(select(. as $x | $inc | index($x))));
 '

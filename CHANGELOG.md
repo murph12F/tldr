@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3 (2026-11-09)
+
+- The explain-more key is now `+`. `?` on an empty prompt opens the shortcuts help in Claude Code and Codex, so it could never be sent.
+- Every key is configurable: `all_key` (default `.`) and `more_key` (default `+`), one of `. + = - ; : ~ ^ *`, set with `/tldr:keys all C` and `/tldr:keys more C`. Personal like `hint_keys`: user config only.
+- `/tldr:keys` with no argument shows all three keys as a table.
+
 ## 0.5.2 (2026-11-09)
 
 - `?` asks for the options to be explained more before picking.

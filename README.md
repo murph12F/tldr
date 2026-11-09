@@ -43,12 +43,20 @@ Status line
 - `d` simple (recommended)
 - `f` none
 
-Reply with keys, or `.` for all recommended.
+Reply with keys, `.` for all recommended, or `+` to explain more.
 ```
 
-Reply `ad` and press Enter, `.` to take every option marked recommended, or `?` to have the options explained more before you pick. Order, case, spaces and commas don't matter. The keys go on the first line; anything after it is passed on as a new request (`.` then, on the next line, `also push it`). A trailing dot is fine (`a.`), and keys with a dot that were not offered (`th.`) are named back so the agent asks instead of guessing. Keys are drawn as inline code, so they stand out in your theme's code color.
+Reply `ad` and press Enter, `.` to take every option marked recommended, or `+` to have the options explained more before you pick. Order, case, spaces and commas don't matter. The keys go on the first line; anything after it is passed on as a new request (`.` then, on the next line, `also push it`). A trailing dot is fine (`a.`), and keys with a dot that were not offered (`th.`) are named back so the agent asks instead of guessing. Keys are drawn as inline code, so they stand out in your theme's code color.
 
-Set your own keys once, e.g. the Dvorak home row: `/tldr:tldr keys aoeuhtns`. The default is `asdfjkl`. Keys are personal, so they are read from your user config only, never from a project file.
+All three kinds of key are yours to set:
+
+| Key | Default | Set it |
+| :- | :- | :- |
+| Option keys, in order | `asdfjkl` | `/tldr:keys aoeuhtns` (2-26 distinct letters or digits) |
+| Every recommended option | `.` | `/tldr:keys all =` |
+| Explain the options more | `+` | `/tldr:keys more ;` |
+
+The two reply keys are one of `. + = - ; : ~ ^ *`. Not `?`, `/`, `!`, `@`, `#` or `&`: Claude Code and Codex give those a meaning on an empty prompt (`?` opens the shortcuts help), so they could never be sent. `/tldr:keys` with no argument shows yours. Keys are personal, so they are read from your user config only, never from a project file. The Pick block's last line names your keys, so the agent and reply-ui use them too. A trailing dot (`a.`) always marks keys.
 
 When your whole message is option keys, the hook reads Claude's last reply from the session transcript, finds the Pick block, and tells Claude what you picked in words: `They picked: Output style = remove (recommended); Status line = simple (recommended).` It also flags two picks for the same decision, keys that labeled more than one option, and decisions you left unanswered, so a two-letter reply can't be misread. Only the block the reply ends on counts (option lines ``- `k` text``, empty lines, and a name line directly above an option), outside code blocks, so examples and earlier lists are ignored. A message that is not all shown keys (`hello`, `a but keep the backup`) passes through untouched.
 
@@ -88,7 +96,7 @@ Type `/tldr` to see the commands:
 | :- | :- |
 | `/tldr:settings` | Every setting as a table: value, what it does, the command that changes it |
 | `/tldr:on` / `/tldr:off` | TLDR on long replies / never |
-| `/tldr:keys` | Show your Pick keys; `/tldr:keys aoeuhtns` sets them |
+| `/tldr:keys` | Show your keys; `/tldr:keys aoeuhtns`, `/tldr:keys all =`, `/tldr:keys more ;` set them |
 | `/tldr:tldr <command>` | Everything else; `/tldr:tldr help` lists it all |
 
 `/tldr:tldr` commands: `always`, `top`, `bottom`, `short [N]`, `full`, `lines N`, `bullets N`, `include +risks -running` (or `include outcome,risks`), `strict on|off`, `choices on|off`, `info short|full`, `set KEY VALUE`, `unset KEY`, `reset`, and `--project` on any change to write `<project>/.claude/tldr.json` instead of yours.
@@ -112,6 +120,8 @@ Output is markdown, so Claude Code draws the settings and help as tables. Settin
 | `choices` | `"keys"`, `"off"` | `"keys"` | Label decision options with keys and decode keys-only replies (see [Choice keys](#choice-keys)) |
 | `pick_info` | `"short"`, `"full"` | `"short"` | `full`: each Pick option also says what it does and its main cost or risk, on the same line |
 | `hint_keys` | 2-26 distinct `a-z`/`0-9` | `"asdfjkl"` | Option keys, in the order Claude uses them. User config only; ignored in a project file |
+| `all_key` | one of `. + = - ; : ~ ^ *` | `"."` | Reply key for every recommended option. User config only |
+| `more_key` | one of `. + = - ; : ~ ^ *` | `"+"` | Reply key for explaining the options more. User config only. If it equals `all_key`, it falls back to `+` (or `.` when `all_key` is `+`) |
 
 Example project override:
 
@@ -129,7 +139,7 @@ Example project override:
 
 Cost: about 160 tokens of context per prompt while enabled (about 80 with `choices: "off"`). `when: "off"` injects nothing. Decoding a keys reply reads the last 400 lines of the transcript, about 50 ms on a 1.7 MB session.
 
-- **Choice decoding** (same hook): only when the prompt is one to twelve shown keys, or `.`. It reads `transcript_path` from the hook input, takes Claude's last text reply, and appends a `[tldr picks]` line naming the chosen options to the same `additionalContext`. Option text is cut to 120 characters and the whole line to 1500. It only repeats text Claude itself wrote in the previous reply.
+- **Choice decoding** (same hook): only when the prompt's first line is one to twelve shown keys, or your all or more key. It reads `transcript_path` from the hook input, takes Claude's last text reply, and appends a `[tldr picks]` line naming the chosen options to the same `additionalContext`. Option text is cut to 120 characters and the whole line to 1500. It only repeats text Claude itself wrote in the previous reply.
 
 ### Security
 
