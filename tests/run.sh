@@ -265,7 +265,7 @@ if [[ "$o" == *"malformed, ignored"* ]]; then ok "/tldr status flags malformed c
 # 12. choice keys: rule text, and decoding a keys-only reply from the transcript
 reset_cfg
 c=$(ctx)
-if [[ "$c" == *'one option per line, ``- `k` option``, keys from `asdfjkl`'* ]] && [[ "$c" == *'or `.` for all recommended'* ]]; then
+if [[ "$c" == *'one option per line, ``- `k` option``, keys from `asdfjkl`'* ]] && [[ "$c" == *'`.` for all recommended, or `?` to explain more'* ]]; then
   ok "choices rule injected with default keys"
 else bad "choices rule" "$c"; fi
 echo '{"hint_keys":"aoeuhtns"}' >"$HOME/.claude/tldr.json"
@@ -340,6 +340,27 @@ for p in hello zz 'a but keep the backup' aeh; do
   if [[ "$c" == *"[tldr picks]"* ]]; then bad "decoded a non-keys reply: $p" "$c"; continue; fi
 done
 ok "ordinary replies and unknown keys are not decoded"
+# 12c. keys on the first line, `?`, trailing dot, unmatched keys
+c=$(keys_ctx $'.\n\nalso rename the repo')
+if [[ "$c" == *"accept every recommended option: Scope = labels + decoding (recommended)"* ]] \
+   && [[ "$c" == *"act on the picks, then handle the rest as a new request"* ]]; then
+  ok "keys on the first line decode; the rest is passed on as a new request"
+else bad "first-line keys" "$c"; fi
+c=$(keys_ctx $'ae\nthen push it')
+if [[ "$c" == *"They picked: Scope"* ]] && [[ "$c" == *"handle the rest as a new request"* ]]; then ok "first-line letter keys with more text"; else bad "first-line letters" "$c"; fi
+c=$(keys_ctx $'please do\nae')
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "keys on a later line are not decoded"; else bad "later-line keys" "$c"; fi
+c=$(keys_ctx '?')
+if [[ "$c" == *'The user replied `?`: before picking, they want the options in your last reply explained more'* ]]; then ok "? asks for the options explained"; else bad "? explain" "$c"; fi
+c=$(keys_ctx 'a.')
+if [[ "$c" == *"They picked: Scope = labels + decoding (recommended)."* ]]; then ok "keys with a trailing dot decode"; else bad "trailing dot" "$c"; fi
+c=$(keys_ctx 'th.')
+if [[ "$c" == *'replied `th.`, which looks like option keys, but h, t were not an option in your last reply: ask what they meant'* ]]; then
+  ok "dotted keys that were not offered are named, so Claude asks"
+else bad "unmatched dotted keys" "$c"; fi
+c=$(keys_ctx 'no')
+if [[ "$c" != *"[tldr picks]"* ]]; then ok "a plain short word with unoffered letters stays text"; else bad "plain word" "$c"; fi
+
 c=$(jq -nc --arg c "$proj" '{cwd:$c,prompt:"ae",transcript_path:"/nonexistent/t.jsonl"}' | "$S/tldr-inject.sh"; echo "rc=$?")
 if [[ "$c" == *"[tldr rules"* ]] && [[ "$c" == *"rc=0"* ]] && [[ "$c" != *"[tldr picks]"* ]]; then
   ok "missing transcript: rules still injected, no decode"

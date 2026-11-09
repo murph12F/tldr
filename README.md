@@ -46,7 +46,7 @@ Status line
 Reply with keys, or `.` for all recommended.
 ```
 
-Reply `ad` and press Enter, or `.` alone to take every option marked recommended. Order, case, spaces and commas don't matter. Keys are drawn as inline code, so they stand out in your theme's code color.
+Reply `ad` and press Enter, `.` to take every option marked recommended, or `?` to have the options explained more before you pick. Order, case, spaces and commas don't matter. The keys go on the first line; anything after it is passed on as a new request (`.` then, on the next line, `also push it`). A trailing dot is fine (`a.`), and keys with a dot that were not offered (`th.`) are named back so the agent asks instead of guessing. Keys are drawn as inline code, so they stand out in your theme's code color.
 
 Set your own keys once, e.g. the Dvorak home row: `/tldr:tldr keys aoeuhtns`. The default is `asdfjkl`. Keys are personal, so they are read from your user config only, never from a project file.
 
@@ -74,7 +74,7 @@ codex plugin marketplace add murph12F/tldr
 codex plugin add tldr@tldr
 ```
 
-Then open `/hooks` in Codex and trust the plugin's hooks: Codex runs no plugin hook until you do. Tested on Codex 0.167.0: rules injected every turn, a Pick block with your keys, and a one-key reply decoded and acted on.
+Then open `/hooks` in Codex and trust the plugin's hooks: Codex runs no plugin hook until you do, and asks again after every update of the plugin (its files changed), showing the hooks as `Failed` until you do. Tested on Codex 0.167.0: rules injected every turn, a Pick block with your keys, and a one-key reply decoded and acted on.
 
 Both read one settings file, `~/.claude/tldr.json`, so your keys and choices follow you between agents. Pick decoding reads either transcript format (Claude Code's session JSONL, Codex's rollout JSONL).
 

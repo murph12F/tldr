@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 (2026-11-09)
+
+- `?` asks for the options to be explained more before picking.
+- Keys on the first line decode even when the message goes on (`.` then a new request on the next lines); the rest is passed on as a new request.
+- A trailing dot is accepted (`a.`); dotted keys that were not offered (`th.`) are named back so the agent asks instead of guessing. A plain short word (`no`) stays text.
+- The Pick block's last line now offers `?`. README notes that Codex asks to approve the hooks again after each update.
+
 ## 0.5.1 (2026-11-09)
 
 - Decoded picks no longer end in a double period when an option's text ends with one.
